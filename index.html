@@ -109,6 +109,10 @@ aside{display:flex;flex-direction:column;gap:20px;position:sticky;top:calc(env(s
 .src a{text-decoration:none;font-weight:500} .src a:hover{text-decoration:underline}
 .linkbtn{background:none;border:0;padding:0;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;text-decoration:underline}
 .linkbtn.danger{color:var(--hi)}
+.cobar{position:sticky;top:calc(env(safe-area-inset-top,0px));z-index:5;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;justify-content:space-between;background:var(--accent-soft);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;font-size:14px}
+.cobar-act{display:flex;gap:14px}
+.cobar .linkbtn{color:var(--accent);font-weight:500;text-decoration:none;font-size:14px}
+#news-sec{scroll-margin-top:8px}
 .older{padding:16px 0;border-bottom:1px solid var(--line);text-align:center}
 .older .btn{width:100%;max-width:360px}
 .empty{padding:40px 0;color:var(--muted);text-align:center}
@@ -148,7 +152,6 @@ footer{color:var(--muted);font-size:13px;border-top:1px solid var(--line);paddin
       <div class="brand">
         <span class="label">LTG · Re-Teck · ITAD 与循环电子 · 行业情报</span>
         <h1>Re-Teck 新闻中心</h1>
-        <p class="sub">竞品、受关注企业与行业动态，每天更新，只保留近 2 个月的新闻；与 Re-Teck 业务直接相关的条目标为“重点”。</p>
       </div>
     </div>
     <div class="meta">
@@ -164,7 +167,7 @@ footer{color:var(--muted);font-size:13px;border-top:1px solid var(--line);paddin
     <details class="mfold" id="brief-fold" open><summary>机会与威胁</summary><div class="ot" id="brief-ot"></div></details>
   </section>
 
-  <section aria-label="最新动态">
+  <section aria-label="最新动态" id="news-sec">
     <h2 class="section-h">最新动态 <span class="label" style="margin-left:6px">近 2 个月 · 按日期倒序</span></h2>
   <div class="main">
       <aside aria-label="筛选">
@@ -184,6 +187,7 @@ footer{color:var(--muted);font-size:13px;border-top:1px solid var(--line);paddin
           <span class="msg" id="feed-status">正在加载新闻…</span>
           <button class="btn" id="add-toggle" style="display:none" type="button" hidden>添加新闻</button>
         </div>
+        <div class="cobar" id="cobar" hidden></div>
         <form class="add" id="add-form" hidden>
           <label>日期<input id="f-date" type="date" required></label>
           <label>公司<select id="f-company" required></select></label>
@@ -341,7 +345,7 @@ function renderPulse(){
     <span class="nm">${esc(c.name)}</span><span class="mom ${esc(c.trend||"flat")}">${esc(c.momentum||"—")}</span><span class="ln">${esc(c.oneLiner||"")}</span></button>`;
   const groups=[...new Set(cos.map(c=>c.region||"其他"))];
   $("pulse").innerHTML=groups.map(g=>`<div class="pgroup"><div class="label">${esc(g)}</div><div class="pulse">${cos.filter(c=>(c.region||"其他")===g).map(card).join("")}</div></div>`).join("");
-  $("pulse").onclick=e=>{const b=e.target.closest(".co");if(b){S.co=S.co===b.dataset.k?"all":b.dataset.k;render();}};
+  $("pulse").onclick=e=>{const b=e.target.closest(".co");if(b)pickCo(b.dataset.k);};
 }
 function renderWatch(){
   const cos=S.cos.filter(c=>c.section==="watch");
@@ -351,7 +355,7 @@ function renderWatch(){
     <span class="nm">${esc(c.name)}</span>${c.relation?`<span class="rel">${esc(c.relation)}</span>`:""}<span class="ln">${esc(c.oneLiner||"")}</span><span class="fc">${tc(c.key)} 条动态 · ${fc(c.key)} 条重点</span></button>`;
   const groups=[...new Set(cos.map(c=>c.group||"其他"))];
   $("watch").innerHTML=groups.map(g=>`<div class="pgroup"><div class="label">${esc(g)}</div><div class="pulse">${cos.filter(c=>(c.group||"其他")===g).map(card).join("")}</div></div>`).join("");
-  $("watch").onclick=e=>{const b=e.target.closest(".co");if(b){S.co=S.co===b.dataset.k?"all":b.dataset.k;render();}};
+  $("watch").onclick=e=>{const b=e.target.closest(".co");if(b)pickCo(b.dataset.k);};
 }
 function renderFilters(){
   const cnt=(f,v)=>S.news.filter(n=>n[f]===v&&(S.scope==="all"||secOf(n.company)===S.scope)).length;
@@ -362,7 +366,29 @@ function renderFilters(){
   chipRow($("f-cat"),[["all","全部",null],...CATS.map(c=>[c,c,cnt("category",c)]).filter(x=>x[2]>0||S.cat===x[0])],S.cat,v=>S.cat=v);
   chipRow($("f-imp"),[["all","全部",null],...Object.entries(IMP).map(([k,l])=>[k,l,cnt("impact",k)])],S.imp,v=>S.imp=v);
 }
+// Tapping a company card jumps up to its news; the sticky bar there jumps back down to the cards.
+function pickCo(k){
+  S.co=S.co===k?"all":k;render();
+  if(S.co!=="all")$("news-sec").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function backToCard(k){
+  const c=document.querySelector(`#pulse .co[data-k="${CSS.escape(k)}"],#watch .co[data-k="${CSS.escape(k)}"]`);
+  (c||$("pulse")).scrollIntoView({behavior:"smooth",block:"center"});
+}
+function renderCobar(){
+  const bar=$("cobar");
+  if(S.co==="all"){bar.hidden=true;bar.innerHTML="";return;}
+  const n=filtered().length,isCard=S.cos.some(c=>c.key===S.co&&(c.competitor||c.section==="watch"));
+  bar.hidden=false;
+  bar.innerHTML=`<span>正在看：<b>${esc(coName(S.co))}</b> · ${n} 条</span><span class="cobar-act">${isCard?`<button type="button" class="linkbtn" data-coback>↓ 返回企业列表</button>`:""}<button type="button" class="linkbtn" data-coclear>✕ 看全部新闻</button></span>`;
+}
+$("cobar").addEventListener("click",e=>{
+  const t=e.target;
+  if(t.hasAttribute("data-coback")){const k=S.co;S.co="all";render();backToCard(k);}
+  else if(t.hasAttribute("data-coclear")){S.co="all";render();$("news-sec").scrollIntoView({block:"start"});}
+});
 function renderFeed(){
+  renderCobar();
   const el=$("feed");
   if(!S.ready){return;}
   if(!S.db){$("feed-status").textContent="新闻存放在共享数据里，登录 claude.ai 后即可查看。";el.innerHTML="";return;}
